@@ -4,7 +4,7 @@ import * as aws from "@pulumi/aws";
 export const bucketName = "pulumi-catpost-cat-pics";
 const feedBucket = new aws.s3.Bucket(bucketName, {
     bucket: bucketName,
-    /*policy: JSON.stringify({
+    policy: JSON.stringify({
       "Version": "2012-10-17",
       "Statement": [
         {
@@ -12,10 +12,19 @@ const feedBucket = new aws.s3.Bucket(bucketName, {
           "Effect": "Allow",
           "Principal": "*",
           "Action": "s3:GetObject",
-          "Resource": `arn:aws:s3:::${bucketName}/!*`
+          "Resource": `arn:aws:s3:::${bucketName}/*`
         }
       ]
-    })*/
+    })
+});
+
+// Public access settings for the bucket
+let bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${bucketName}-publicaccessblock`, {
+    bucket: feedBucket.id,
+    blockPublicAcls: false,      // Do not block public ACLs for this bucket
+    blockPublicPolicy: false,    // Do not block public bucket policies for this bucket
+    ignorePublicAcls: false,     // Do not ignore public ACLs for this bucket
+    restrictPublicBuckets: false // Do not restrict public bucket policies for this bucket
 });
 
 // const tableName = "pulumi-catpost-table";
