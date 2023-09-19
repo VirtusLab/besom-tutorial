@@ -195,7 +195,7 @@ const addIntegration = new aws.apigateway.Integration("addIntegration", {
 
 const apiDeployment = new aws.apigateway.Deployment("apiDeployment", {
     restApi: api,
-    // workarounds for the terraform bugs
+    // workarounds for the underlying provider bugs
     triggers: {
         "resourceId": api.rootResourceId,
         "feedMethodId": feedMethod.id,
@@ -204,13 +204,6 @@ const apiDeployment = new aws.apigateway.Deployment("apiDeployment", {
         "addMethodId": addMethod.id,
         "addIntegrationId": addIntegration.id,
     },
-    stageDescription: pulumi.interpolate`
-${api.rootResourceId}
-${feedMethod.id}
-${feedIntegration.id}
-${addResource.id}
-${addMethod.id}
-${addIntegration.id}`
 }, {
     deleteBeforeReplace: false,
 });
