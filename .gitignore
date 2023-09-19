@@ -1,0 +1,8 @@
+.bsp/
+.metals/
+.vscode/
+.scala-build/
+
+/node_modules/
+
+*.txt
