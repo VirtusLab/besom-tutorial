@@ -3,24 +3,25 @@ import * as aws from "@pulumi/aws";
 
 export const bucketName = "pulumi-catpost-cat-pics";
 const feedBucket = new aws.s3.Bucket(bucketName, {
-  bucket: bucketName,
-  // acl: "public-read",
-  policy: JSON.stringify({
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Sid": "PublicReadGetObject",
-        "Effect": "Allow",
-        "Principal": "*",
-        "Action": "s3:GetObject",
-        "Resource": `arn:aws:s3:::${bucketName}/*`
-      }
-    ]
-  })
+    bucket: bucketName,
+    /*policy: JSON.stringify({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Sid": "PublicReadGetObject",
+          "Effect": "Allow",
+          "Principal": "*",
+          "Action": "s3:GetObject",
+          "Resource": `arn:aws:s3:::${bucketName}/!*`
+        }
+      ]
+    })*/
 });
-/*
 
-const tableName = "pulumi-catpost-table";
+// const tableName = "pulumi-catpost-table";
+const tableName = "CatPostTable";
+
+/*
 const catPostTable = new aws.dynamodb.Table("cat-post-table", {
   name: tableName,
   attributes: [
@@ -74,11 +75,17 @@ const entry3 = new aws.dynamodb.TableItem("entry3", {
 
 */
 
-const feedName = "pulumi-render-feed"
 const stageName = "default"
+const feedName = "pulumi-render-feed"
+const addName = "pulumi-add-post"
 
 const feedLambdaLogs = new aws.cloudwatch.LogGroup("/aws/lambda/" + feedName, {
     name: "/aws/lambda/" + feedName,
+    retentionInDays: 3,
+});
+
+const addLambdaLogs = new aws.cloudwatch.LogGroup("/aws/lambda/" + addName, {
+    name: "/aws/lambda/" + addName,
     retentionInDays: 3,
 });
 
@@ -90,15 +97,36 @@ const feedLambda = new aws.lambda.Function(feedName, {
     handler: "whatever",
     environment: {
         variables: {
-            "STAGE": "default",
+            "STAGE": stageName,
             "BUCKET_NAME": bucketName,
+            "DYNAMO_TABLE": tableName,
         },
     },
 });
 
+const addLambda = new aws.lambda.Function(addName, {
+    name: addName,
+    role: "arn:aws:iam::294583657590:role/lambda-role", // default role
+    runtime: "provided.al2", // Use the custom runtime
+    code: new pulumi.asset.FileArchive("../pre-built/post-cat-entry.zip"),
+    handler: "whatever",
+    environment: {
+        variables: {
+            "STAGE": stageName,
+            "BUCKET_NAME": bucketName,
+            "DYNAMO_TABLE": tableName,
+        },
+    },
+})
+
 const feedLambdaFunctionUrl = new aws.lambda.FunctionUrl("feedLambdaFunctionUrl", {
     authorizationType: "NONE",
     functionName: feedLambda.name
+})
+
+const addLambdaFunctionUrl = new aws.lambda.FunctionUrl("addLambdaFunctionUrl", {
+    authorizationType: "NONE",
+    functionName: addLambda.name
 })
 
 export const feedARN = feedLambda.arn
@@ -118,10 +146,30 @@ const feedLambdaPermission = new aws.lambda.Permission("feedLambdaPermission", {
     sourceArn: pulumi.interpolate`${api.executionArn}/*`,
 });
 
+const addLambdaPermission = new aws.lambda.Permission("addLambdaPermission", {
+    action: "lambda:InvokeFunction",
+    function: addLambda.name,
+    principal: "apigateway.amazonaws.com",
+    sourceArn: pulumi.interpolate`${api.executionArn}/*`,
+});
+
 const feedMethod = new aws.apigateway.Method("feedMethod", {
     restApi: api,
     resourceId: api.rootResourceId, // use URL root path
     httpMethod: "GET",
+    authorization: "NONE",
+});
+
+const addResource = new aws.apigateway.Resource("addResource", {
+    restApi: api,
+    pathPart: "post",
+    parentId: api.rootResourceId,
+})
+
+const addMethod = new aws.apigateway.Method("addMethod", {
+    restApi: api,
+    resourceId: addResource.id, // use URL root path
+    httpMethod: "POST",
     authorization: "NONE",
 });
 
@@ -135,23 +183,45 @@ const feedIntegration = new aws.apigateway.Integration("feedIntegration", {
     uri: feedLambda.invokeArn,
 });
 
+const addIntegration = new aws.apigateway.Integration("addIntegration", {
+    restApi: api,
+    resourceId: addResource.id,
+    httpMethod: addMethod.httpMethod,
+    // must be POST, this is not a mistake: https://repost.aws/knowledge-center/api-gateway-lambda-template-invoke-error
+    integrationHttpMethod: "POST",
+    type: "AWS_PROXY", // Lambda Proxy integration
+    uri: addLambda.invokeArn,
+});
+
 const apiDeployment = new aws.apigateway.Deployment("apiDeployment", {
     restApi: api,
     // workarounds for the terraform bugs
     triggers: {
         "resourceId": api.rootResourceId,
-        "feedIntegrationId": feedIntegration.id,
         "feedMethodId": feedMethod.id,
+        "feedIntegrationId": feedIntegration.id,
+        "addResourceId": addResource.id,
+        "addMethodId": addMethod.id,
+        "addIntegrationId": addIntegration.id,
     },
-    stageDescription: pulumi.interpolate`${api.rootResourceId}${feedMethod.id}${feedIntegration.id}`
+    stageDescription: pulumi.interpolate`
+${api.rootResourceId}
+${feedMethod.id}
+${feedIntegration.id}
+${addResource.id}
+${addMethod.id}
+${addIntegration.id}`
 }, {
-    deleteBeforeReplace: true
+    deleteBeforeReplace: false,
 });
 
 const apiStage = new aws.apigateway.Stage("apiStage", {
     restApi: api.id,
     deployment: apiDeployment.id,
     stageName: stageName,
+}, {
+    deleteBeforeReplace: true,
+    deletedWith: apiDeployment,
 });
 
 const apiStageSettings = new aws.apigateway.MethodSettings("apiStageSettings", {
