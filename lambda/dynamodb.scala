@@ -19,7 +19,7 @@ object dynamodb:
     try
       val request = QueryRequest
         .builder()
-        .tableName("CatPostTable")
+        .tableName(Env.ddbTable)
         .keyConditionExpression("PartitionKey = :pkey")
         .expressionAttributeValues(Map(":pkey" -> AttributeValue.builder().s("ALL_ENTRIES").build()).asJava)
         .scanIndexForward(false)
@@ -55,7 +55,7 @@ object dynamodb:
 
       val putItemRequest = PutItemRequest
         .builder()
-        .tableName("CatPostTable")
+        .tableName(Env.ddbTable)
         .item(item.asJava)
         .build()
 
