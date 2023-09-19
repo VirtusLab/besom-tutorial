@@ -129,7 +129,8 @@ const feedIntegration = new aws.apigateway.Integration("feedIntegration", {
     restApi: api,
     resourceId: api.rootResourceId,
     httpMethod: feedMethod.httpMethod,
-    integrationHttpMethod: feedMethod.httpMethod,
+    // must be POST, this is not a mistake: https://repost.aws/knowledge-center/api-gateway-lambda-template-invoke-error
+    integrationHttpMethod: "POST",
     type: "AWS_PROXY", // Lambda Proxy integration
     uri: feedLambda.invokeArn,
 });
