@@ -4,6 +4,7 @@ import * as aws from "@pulumi/aws";
 export const bucketName = "pulumi-catpost-cat-pics";
 const feedBucket = new aws.s3.Bucket(bucketName, {
     bucket: bucketName,
+    forceDestroy: false, // change to true when destroying completely
     policy: JSON.stringify({
       "Version": "2012-10-17",
       "Statement": [
@@ -171,6 +172,7 @@ const apiDeployment = new aws.apigateway.Deployment("apiDeployment", {
         "addIntegrationId": addIntegration.id,
     },
 }, {
+    dependsOn: [feedLambda, addLambda],
     deleteBeforeReplace: false,
 });
 
@@ -180,7 +182,6 @@ const apiStage = new aws.apigateway.Stage("apiStage", {
     stageName: stageName,
 }, {
     deleteBeforeReplace: true,
-    deletedWith: apiDeployment,
 });
 
 const apiStageSettings = new aws.apigateway.MethodSettings("apiStageSettings", {
