@@ -166,7 +166,7 @@ import besom.types.Archive.FileArchive
   val feedMethod = apigateway.method(
     "feedMethod",
     apigateway.MethodArgs(
-      restApi = api.id.map(_.id)),
+      restApi = api.id,
       resourceId = api.rootResourceId,
       httpMethod = "GET",
       authorization = "NONE"
