@@ -221,12 +221,12 @@ import besom.types.Archive.FileArchive
     apigateway.DeploymentArgs(
     restApi = api.id,
       triggers = Map(
-        "resourceId" -> api.rootResourceid,
+        "resourceId" -> api.rootResourceId,
         "feedMethodId" -> feedMethod.id,
         "feedIntegrationId" -> feedIntegration.id,
         "addResourceId" -> addResource.id,
         "addMethodId" -> addMethod.id,
-        "addIntegrationId" -> addIntegration.id.asInstanceOf[String] // FIXME: this is a hack
+        "addIntegrationId" -> addIntegration.id,
       )
     ),
     CustomResourceOptions(
