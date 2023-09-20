@@ -166,7 +166,7 @@ import besom.types.Archive.FileArchive
   val feedMethod = apigateway.method(
     "feedMethod",
     apigateway.MethodArgs(
-      restApi = api.id.asInstanceOf[String], // FIXME: this is a hack
+      restApi = api.id,
       resourceId = api.rootResourceId,
       httpMethod = "GET",
       authorization = "NONE"
@@ -176,7 +176,7 @@ import besom.types.Archive.FileArchive
   val addResource = apigateway.resource(
     "addResource",
     apigateway.ResourceArgs(
-      restApi = api.id.asInstanceOf[String], // FIXME: this is a hack,
+      restApi = api.id,
       pathPart = "post",
       parentId = api.rootResourceId
     )
@@ -185,8 +185,8 @@ import besom.types.Archive.FileArchive
   val addMethod = apigateway.method(
     "addMethod",
     apigateway.MethodArgs(
-      restApi = api.id.asInstanceOf[String], // FIXME: this is a hack,
-      resourceId = addResource.id.asInstanceOf[String], // FIXME: this is a hack
+      restApi = api.id,
+      resourceId = addResource.id,
       httpMethod = "POST",
       authorization = "NONE",
     )
@@ -195,8 +195,8 @@ import besom.types.Archive.FileArchive
   val feedIntegration = apigateway.integration(
     "feedIntegration",
     apigateway.IntegrationArgs(
-      restApi = api.id.asInstanceOf[String], // FIXME: this is a hack,
-      resourceId = api.rootResourceId.asInstanceOf[String], // FIXME: this is a hack
+      restApi = api.id,
+      resourceId = api.rootResourceId,
       httpMethod = feedMethod.httpMethod,
       integrationHttpMethod = "POST",
       `type` = "AWS_PROXY",
@@ -207,8 +207,8 @@ import besom.types.Archive.FileArchive
   val addIntegration = apigateway.integration(
     "addIntegration",
     apigateway.IntegrationArgs(
-      restApi = api.id.asInstanceOf[String], // FIXME: this is a hack
-      resourceId = addResource.id.asInstanceOf[String], // FIXME: this is a hack
+      restApi = api.id,
+      resourceId = addResource.id,
       httpMethod = addMethod.httpMethod,
       integrationHttpMethod = "POST",
       `type` = "AWS_PROXY",
@@ -219,13 +219,13 @@ import besom.types.Archive.FileArchive
   val apiDeployment = apigateway.deployment(
     "apiDeployment",
     apigateway.DeploymentArgs(
-    restApi = api.id.asInstanceOf[String], // FIXME: this is a hack
+    restApi = api.id,
       triggers = Map(
-        "resourceId" -> api.rootResourceId.asInstanceOf[String], // FIXME: this is a hack
-        "feedMethodId" -> feedMethod.id.asInstanceOf[String], // FIXME: this is a hack
-        "feedIntegrationId" -> feedIntegration.id.asInstanceOf[String], // FIXME: this is a hack
-        "addResourceId" -> addResource.id.asInstanceOf[String], // FIXME: this is a hack
-        "addMethodId" -> addMethod.id.asInstanceOf[String], // FIXME: this is a hack
+        "resourceId" -> api.rootResourceid,
+        "feedMethodId" -> feedMethod.id,
+        "feedIntegrationId" -> feedIntegration.id,
+        "addResourceId" -> addResource.id,
+        "addMethodId" -> addMethod.id,
         "addIntegrationId" -> addIntegration.id.asInstanceOf[String] // FIXME: this is a hack
       )
     ),
@@ -238,8 +238,8 @@ import besom.types.Archive.FileArchive
   val apiStage = apigateway.stage(
     "apiStage",
     apigateway.StageArgs(
-      restApi = api.id.asInstanceOf[String], // FIXME: this is a hack
-      deployment = apiDeployment.id.asInstanceOf[String], // FIXME: this is a hack
+      restApi = api.id,
+      deployment = apiDeployment.id,
       stageName = stageName
     ),
     CustomResourceOptions(
@@ -250,7 +250,7 @@ import besom.types.Archive.FileArchive
   val apiStageSettings = apigateway.methodSettings(
     "apiStageSettings",
     apigateway.MethodSettingsArgs(
-      restApi = api.id.asInstanceOf[String], // FIXME: this is a hack
+      restApi = api.id,
       stageName = apiStage.stageName,
       methodPath = "*/*",
       settings = MethodSettingsSettingsArgs(
