@@ -8,7 +8,7 @@ import besom.types.Archive.FileArchive
 
 @main def main(): Unit = Pulumi.run {
   val bucketName: NonEmptyString = "pulumi-catpost-cat-pics"
-  val feedBucket = s3.bucket(
+  val feedBucket = s3.Bucket(
     bucketName,
     s3.BucketArgs(
       bucket = bucketName,
@@ -22,17 +22,17 @@ import besom.types.Archive.FileArchive
                   |      "Effect": "Allow",
                   |      "Principal": "*",
                   |      "Action": "s3:GetObject",
-                  |      "Resource": `arn:aws:s3:::${bucketName}/*`
+                  |      "Resource": "arn:aws:s3:::${bucketName}/*"
                   |    }
                   |  ]
                   |}""".stripMargin
     )
   )
 
-  val bucketPublicAccessBlock = s3.bucketPublicAccessBlock(
+  val bucketPublicAccessBlock = s3.BucketPublicAccessBlock(
     s"${bucketName}-publicaccessblock",
     s3.BucketPublicAccessBlockArgs(
-      bucket = feedBucket.id,
+      bucket = feedBucket.id.map(_.asString), // FIXME this is a hack
       blockPublicAcls = false, // Do not block public ACLs for this bucket
       blockPublicPolicy = false, // Do not block public bucket policies for this bucket
       ignorePublicAcls = false, // Do not ignore public ACLs for this bucket
@@ -41,7 +41,7 @@ import besom.types.Archive.FileArchive
   )
 
   val tableName: NonEmptyString = "pulumi-catpost-table";
-  val catPostTable = dynamodb.table(
+  val catPostTable = dynamodb.Table(
     tableName,
     dynamodb.TableArgs(
       name = tableName,
@@ -67,7 +67,7 @@ import besom.types.Archive.FileArchive
   val addName: NonEmptyString   = "pulumi-add-post"
 
   val feedLambdaLogsName: NonEmptyString = s"/aws/lambda/$feedName"
-  val feedLambdaLogs = cloudwatch.logGroup(
+  val feedLambdaLogs = cloudwatch.LogGroup(
     feedLambdaLogsName,
     cloudwatch.LogGroupArgs(
       name = feedLambdaLogsName,
@@ -76,7 +76,7 @@ import besom.types.Archive.FileArchive
   )
 
   val addLambdaLogsName: NonEmptyString = s"/aws/lambda/$addName"
-  val addLambdaLogs = cloudwatch.logGroup(
+  val addLambdaLogs = cloudwatch.LogGroup(
     addLambdaLogsName,
     cloudwatch.LogGroupArgs(
       name = addLambdaLogsName,
@@ -84,7 +84,7 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val feedLambda = lambda.function(
+  val feedLambda = lambda.Function(
     feedName,
     lambda.FunctionArgs(
       name = feedName,
@@ -102,7 +102,7 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val addLambda = lambda.function(
+  val addLambda = lambda.Function(
     addName,
     lambda.FunctionArgs(
       name = addName,
@@ -120,7 +120,7 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val feedLambdaFunctionUrl = lambda.functionUrl(
+  val feedLambdaFunctionUrl = lambda.FunctionUrl(
     "feedLambdaFunctionUrl",
     lambda.FunctionUrlArgs(
       authorizationType = "NONE",
@@ -128,7 +128,7 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val addLambdaFunctionUrl = lambda.functionUrl(
+  val addLambdaFunctionUrl = lambda.FunctionUrl(
     "addLambdaFunctionUrl",
     lambda.FunctionUrlArgs(
       authorizationType = "NONE",
@@ -136,66 +136,66 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val api = apigateway.restApi(
+  val api = apigateway.RestApi(
     "api",
     apigateway.RestApiArgs(
       binaryMediaTypes = List("multipart/form-data"),
       endpointConfiguration = RestApiEndpointConfigurationArgs(types = "REGIONAL")
     )
   )
-  val feedLambdaPermission = lambda.permission(
+  val feedLambdaPermission = lambda.Permission(
     "feedLambdaPermission",
     lambda.PermissionArgs(
       action = "lambda:InvokeFunction",
       function = feedLambda.name,
       principal = "apigateway.amazonaws.com",
-      sourceArn = s"${api.executionArn}/*"
+      sourceArn = p"${api.executionArn}/*"
     )
   )
 
-  val addLambdaPermission = lambda.permission(
+  val addLambdaPermission = lambda.Permission(
     "addLambdaPermission",
     lambda.PermissionArgs(
       action = "lambda:InvokeFunction",
       function = addLambda.name,
       principal = "apigateway.amazonaws.com",
-      sourceArn = s"${api.executionArn}/*"
+      sourceArn = p"${api.executionArn}/*"
     )
   )
 
-  val feedMethod = apigateway.method(
+  val feedMethod = apigateway.Method(
     "feedMethod",
     apigateway.MethodArgs(
-      restApi = api.id,
+      restApi = api.id.map(_.asString), // FIXME: this is a hack
       resourceId = api.rootResourceId,
       httpMethod = "GET",
       authorization = "NONE"
     )
   )
 
-  val addResource = apigateway.resource(
+  val addResource = apigateway.Resource(
     "addResource",
     apigateway.ResourceArgs(
-      restApi = api.id,
+      restApi = api.id.map(_.asString), // FIXME: this is a hack
       pathPart = "post",
       parentId = api.rootResourceId
     )
   )
 
-  val addMethod = apigateway.method(
+  val addMethod = apigateway.Method(
     "addMethod",
     apigateway.MethodArgs(
-      restApi = api.id,
-      resourceId = addResource.id,
+      restApi = api.id.map(_.asString), // FIXME: this is a hack
+      resourceId = addResource.id.map(_.asString), // FIXME: this is a hack
       httpMethod = "POST",
       authorization = "NONE",
     )
   )
 
-  val feedIntegration = apigateway.integration(
+  val feedIntegration = apigateway.Integration(
     "feedIntegration",
     apigateway.IntegrationArgs(
-      restApi = api.id,
+      restApi = api.id.map(_.asString), // FIXME: this is a hack
       resourceId = api.rootResourceId,
       httpMethod = feedMethod.httpMethod,
       integrationHttpMethod = "POST",
@@ -204,11 +204,11 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val addIntegration = apigateway.integration(
+  val addIntegration = apigateway.Integration(
     "addIntegration",
     apigateway.IntegrationArgs(
-      restApi = api.id,
-      resourceId = addResource.id,
+      restApi = api.id.map(_.asString), // FIXME this is a hack
+      resourceId = addResource.id.map(_.asString), // FIXME this is a hack
       httpMethod = addMethod.httpMethod,
       integrationHttpMethod = "POST",
       `type` = "AWS_PROXY",
@@ -216,17 +216,17 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val apiDeployment = apigateway.deployment(
+  val apiDeployment = apigateway.Deployment(
     "apiDeployment",
     apigateway.DeploymentArgs(
-    restApi = api.id,
+    restApi = api.id.map(_.asString), // FIXME this is a hack
       triggers = Map(
         "resourceId" -> api.rootResourceId,
-        "feedMethodId" -> feedMethod.id,
-        "feedIntegrationId" -> feedIntegration.id,
-        "addResourceId" -> addResource.id,
-        "addMethodId" -> addMethod.id,
-        "addIntegrationId" -> addIntegration.id,
+        "feedMethodId" -> feedMethod.id.map(_.asString), // FIXME this is a hack
+        "feedIntegrationId" -> feedIntegration.id.map(_.asString), // FIXME this is a hack
+        "addResourceId" -> addResource.id.map(_.asString), // FIXME this is a hack
+        "addMethodId" -> addMethod.id.map(_.asString), // FIXME this is a hack
+        "addIntegrationId" -> addIntegration.id.map(_.asString), // FIXME this is a hack
       )
     ),
     CustomResourceOptions(
@@ -235,11 +235,11 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val apiStage = apigateway.stage(
+  val apiStage = apigateway.Stage(
     "apiStage",
     apigateway.StageArgs(
-      restApi = api.id,
-      deployment = apiDeployment.id,
+      restApi = api.id.map(_.asString), // FIXME this is a hack
+      deployment = apiDeployment.id.map(_.asString), // FIXME this is a hack
       stageName = stageName
     ),
     CustomResourceOptions(
@@ -247,10 +247,10 @@ import besom.types.Archive.FileArchive
     )
   )
 
-  val apiStageSettings = apigateway.methodSettings(
+  val apiStageSettings = apigateway.MethodSettings(
     "apiStageSettings",
     apigateway.MethodSettingsArgs(
-      restApi = api.id,
+      restApi = api.id.map(_.asString), // FIXME this is a hack
       stageName = apiStage.stageName,
       methodPath = "*/*",
       settings = MethodSettingsSettingsArgs(
