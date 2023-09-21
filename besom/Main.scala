@@ -5,27 +5,33 @@ import besom.api.aws.apigateway.inputs.*
 import besom.api.aws.lambda.inputs.*
 import besom.api.aws.dynamodb.inputs.*
 import besom.types.Archive.FileArchive
+import spray.json._
+import DefaultJsonProtocol._
 
 @main def main(): Unit = Pulumi.run {
   val bucketName: NonEmptyString = "pulumi-catpost-cat-pics"
+
+  val bucketPolicy = JsObject(
+    "Version" -> JsString("2012-10-17"),
+    "Statement" -> JsArray(
+      JsObject(
+        "Sid" -> JsString("PublicReadGetObject"),
+        "Effect" -> JsString("Allow"),
+        "Principal" -> JsObject(
+          "AWS" -> JsString("*")
+        ),
+        "Action" -> JsString("s3:GetObject"),
+        "Resource" -> JsString(s"arn:aws:s3:::${bucketName}/*")
+      )
+    )
+  ).prettyPrint
+
   val feedBucket = s3.Bucket(
     bucketName,
     s3.BucketArgs(
       bucket = bucketName,
       forceDestroy = false, // change to true when destroying completely
-      // todo: spray the string
-      policy = s"""{
-                  |  "Version": "2012-10-17",
-                  |  "Statement": [
-                  |    {
-                  |      "Sid": "PublicReadGetObject",
-                  |      "Effect": "Allow",
-                  |      "Principal": "*",
-                  |      "Action": "s3:GetObject",
-                  |      "Resource": "arn:aws:s3:::${bucketName}/*"
-                  |    }
-                  |  ]
-                  |}""".stripMargin
+      policy = bucketPolicy
     )
   )
 
@@ -188,7 +194,7 @@ import besom.types.Archive.FileArchive
       restApi = api.id.map(_.asString), // FIXME: this is a hack
       resourceId = addResource.id.map(_.asString), // FIXME: this is a hack
       httpMethod = "POST",
-      authorization = "NONE",
+      authorization = "NONE"
     )
   )
 
@@ -219,14 +225,14 @@ import besom.types.Archive.FileArchive
   val apiDeployment = apigateway.Deployment(
     "apiDeployment",
     apigateway.DeploymentArgs(
-    restApi = api.id.map(_.asString), // FIXME this is a hack
+      restApi = api.id.map(_.asString), // FIXME this is a hack
       triggers = Map(
         "resourceId" -> api.rootResourceId,
         "feedMethodId" -> feedMethod.id.map(_.asString), // FIXME this is a hack
         "feedIntegrationId" -> feedIntegration.id.map(_.asString), // FIXME this is a hack
         "addResourceId" -> addResource.id.map(_.asString), // FIXME this is a hack
         "addMethodId" -> addMethod.id.map(_.asString), // FIXME this is a hack
-        "addIntegrationId" -> addIntegration.id.map(_.asString), // FIXME this is a hack
+        "addIntegrationId" -> addIntegration.id.map(_.asString) // FIXME this is a hack
       )
     ),
     CustomResourceOptions(
@@ -283,6 +289,6 @@ import besom.types.Archive.FileArchive
     _        <- apiStageSettings
   yield Pulumi.exports(
     feedBucket = bucket.bucket,
-    endpointURL = apiStage.invokeUrl,
+    endpointURL = apiStage.invokeUrl
   )
 }
