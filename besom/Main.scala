@@ -8,7 +8,7 @@ import besom.types.Archive.FileArchive
 import spray.json._
 import DefaultJsonProtocol._
 
-@main def main(): Unit = Pulumi.run {
+@main def main: Unit = Pulumi.run {
   val bucketName: NonEmptyString = "pulumi-catpost-cat-pics"
 
   val bucketPolicy = JsObject(
