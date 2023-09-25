@@ -7,7 +7,7 @@ const feedBucket = new aws.s3.Bucket("pulumi-catpost-cat-pics", {
     forceDestroy: true, // change to true when destroying completely
 });
 
-const bucketName = feedBucket.bucket
+export const bucketName = feedBucket.bucket
 
 bucketName.apply(bucketName => {
     const feedBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${bucketName}-publicaccessblock`, {

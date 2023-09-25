@@ -9,40 +9,52 @@ import spray.json._
 import DefaultJsonProtocol._
 
 @main def main: Unit = Pulumi.run {
-  val bucketName: NonEmptyString = "pulumi-catpost-cat-pics"
-
-  val bucketPolicy = JsObject(
-    "Version" -> JsString("2012-10-17"),
-    "Statement" -> JsArray(
-      JsObject(
-        "Sid" -> JsString("PublicReadGetObject"),
-        "Effect" -> JsString("Allow"),
-        "Principal" -> JsObject(
-          "AWS" -> JsString("*")
-        ),
-        "Action" -> JsString("s3:GetObject"),
-        "Resource" -> JsString(s"arn:aws:s3:::${bucketName}/*")
-      )
-    )
-  ).prettyPrint
 
   val feedBucket = s3.Bucket(
-    bucketName,
+    "pulumi-catpost-cat-pics",
     s3.BucketArgs(
-      bucket = bucketName,
-      forceDestroy = false, // change to true when destroying completely
-      policy = bucketPolicy
+      forceDestroy = true // change to true when destroying completely
     )
   )
 
-  val bucketPublicAccessBlock = s3.BucketPublicAccessBlock(
-    s"${bucketName}-publicaccessblock",
-    s3.BucketPublicAccessBlockArgs(
-      bucket = feedBucket.id.map(_.asString), // FIXME this is a hack
-      blockPublicAcls = false, // Do not block public ACLs for this bucket
-      blockPublicPolicy = false, // Do not block public bucket policies for this bucket
-      ignorePublicAcls = false, // Do not ignore public ACLs for this bucket
-      restrictPublicBuckets = false // Do not restrict public bucket policies for this bucket
+  val bucketName = feedBucket.bucket.map(NonEmptyString(_).get) // FIXME: this is a hack
+
+  val feedBucketPublicAccessBlock = bucketName.flatMap(name =>
+    s3.BucketPublicAccessBlock(
+      s"${name}-publicaccessblock",
+      s3.BucketPublicAccessBlockArgs(
+        bucket = feedBucket.id.map(_.asString), // FIXME this is a hack
+        blockPublicAcls = false, // Do not block public ACLs for this bucket
+        blockPublicPolicy = false, // Do not block public bucket policies for this bucket
+        ignorePublicAcls = false, // Do not ignore public ACLs for this bucket
+        restrictPublicBuckets = false // Do not restrict public bucket policies for this bucket
+      )
+    )
+  )
+
+  val feedBucketPolicy = bucketName.flatMap(name =>
+    s3.BucketPolicy(
+      s"${name}-access-policy",
+      s3.BucketPolicyArgs(
+        bucket = feedBucket.id.map(_.asString), // FIXME this is a hack
+        policy = JsObject(
+          "Version" -> JsString("2012-10-17"),
+          "Statement" -> JsArray(
+            JsObject(
+              "Sid" -> JsString("PublicReadGetObject"),
+              "Effect" -> JsString("Allow"),
+              "Principal" -> JsObject(
+                "AWS" -> JsString("*")
+              ),
+              "Action" -> JsArray(JsString("s3:GetObject")),
+              "Resource" -> JsArray(JsString(s"arn:aws:s3:::${name}/*"))
+            )
+          )
+        ).prettyPrint
+      ),
+      CustomResourceOptions(
+        dependsOn = Output.sequence(List(feedBucketPublicAccessBlock))
+      )
     )
   )
 
@@ -267,8 +279,9 @@ import DefaultJsonProtocol._
   )
 
   for
-    bucket   <- feedBucket
-    _        <- bucketPublicAccessBlock
+    bucket <- feedBucket
+    _      <- feedBucketPolicy
+    // _        <- feedBucketPublicAccessBlock // FIXME: this is broken
     _        <- catPostTable
     _        <- feedLambdaLogs
     _        <- addLambdaLogs
