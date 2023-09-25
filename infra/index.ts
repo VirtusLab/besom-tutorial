@@ -1,45 +1,59 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-export const bucketName = "pulumi-catpost-cat-pics";
-const feedBucket = new aws.s3.Bucket(bucketName, {
-    bucket: bucketName,
-    forceDestroy: false, // change to true when destroying completely
-    policy: JSON.stringify({
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-          "Sid": "PublicReadGetObject",
-          "Effect": "Allow",
-          "Principal": "*",
-          "Action": "s3:GetObject",
-          "Resource": `arn:aws:s3:::${bucketName}/*`
-        }
-      ]
-    })
+// Public access settings for the bucket
+const feedBucket = new aws.s3.Bucket("pulumi-catpost-cat-pics", {
+    // the bucket name will be randomly generated unless explicitly set
+    forceDestroy: true, // change to true when destroying completely
 });
 
-// Public access settings for the bucket
-let bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${bucketName}-publicaccessblock`, {
-    bucket: feedBucket.id,
-    blockPublicAcls: false,      // Do not block public ACLs for this bucket
-    blockPublicPolicy: false,    // Do not block public bucket policies for this bucket
-    ignorePublicAcls: false,     // Do not ignore public ACLs for this bucket
-    restrictPublicBuckets: false // Do not restrict public bucket policies for this bucket
+const bucketName = feedBucket.bucket
+
+bucketName.apply(bucketName => {
+    const feedBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${bucketName}-publicaccessblock`, {
+        bucket: feedBucket.id,
+        blockPublicAcls: false,      // Do not block public ACLs for this bucket
+        blockPublicPolicy: false,    // Do not block public bucket policies for this bucket
+        ignorePublicAcls: false,     // Do not ignore public ACLs for this bucket
+        restrictPublicBuckets: false // Do not restrict public bucket policies for this bucket
+    });
+
+    // need to create a bucket policy separately to allow public access to the bucket due to AWS race condition
+    new aws.s3.BucketPolicy(`${bucketName}-access-policy`, {
+        bucket: feedBucket.id,
+        policy: JSON.stringify({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "PublicReadGetObject",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": [
+                        "s3:GetObject"
+                    ],
+                    "Resource": [
+                        `arn:aws:s3:::${bucketName}/*`
+                    ]
+                }
+            ]
+        })
+    }, {
+        dependsOn: feedBucketPublicAccessBlock
+    });
 });
 
 const tableName = "pulumi-catpost-table";
 
 const catPostTable = new aws.dynamodb.Table(tableName, {
-  name: tableName,
-  attributes: [
-    { name: "PartitionKey", type: "S" },
-    { name: "timestamp", type: "S" }
-  ],
-  hashKey: "PartitionKey",
-  rangeKey: "timestamp",
-  readCapacity: 5,
-  writeCapacity: 5,
+    name: tableName,
+    attributes: [
+        { name: "PartitionKey", type: "S" },
+        { name: "timestamp", type: "S" }
+    ],
+    hashKey: "PartitionKey",
+    rangeKey: "timestamp",
+    readCapacity: 5,
+    writeCapacity: 5,
 });
 
 const stageName = "default"
@@ -56,35 +70,39 @@ const addLambdaLogs = new aws.cloudwatch.LogGroup("/aws/lambda/" + addName, {
     retentionInDays: 3,
 });
 
-const feedLambda = new aws.lambda.Function(feedName, {
-    name: feedName,
-    role: "arn:aws:iam::294583657590:role/lambda-role", // default role
-    runtime: "provided.al2", // Use the custom runtime
-    code: new pulumi.asset.FileArchive("../pre-built/render-feed.zip"),
-    handler: "whatever",
-    environment: {
-        variables: {
-            "STAGE": stageName,
-            "BUCKET_NAME": bucketName,
-            "DYNAMO_TABLE": tableName,
+const feedLambda = bucketName.apply(bucketName => {
+    return new aws.lambda.Function(feedName, {
+        name: feedName,
+        role: "arn:aws:iam::294583657590:role/lambda-role", // default role
+        runtime: "provided.al2", // Use the custom runtime
+        code: new pulumi.asset.FileArchive("../pre-built/render-feed.zip"),
+        handler: "whatever",
+        environment: {
+            variables: {
+                "STAGE": stageName,
+                "BUCKET_NAME": bucketName,
+                "DYNAMO_TABLE": tableName,
+            },
         },
-    },
+    })
 });
 
-const addLambda = new aws.lambda.Function(addName, {
-    name: addName,
-    role: "arn:aws:iam::294583657590:role/lambda-role", // default role
-    runtime: "provided.al2", // Use the custom runtime
-    code: new pulumi.asset.FileArchive("../pre-built/post-cat-entry.zip"),
-    handler: "whatever",
-    environment: {
-        variables: {
-            "STAGE": stageName,
-            "BUCKET_NAME": bucketName,
-            "DYNAMO_TABLE": tableName,
+const addLambda = bucketName.apply(bucketName => {
+    return new aws.lambda.Function(addName, {
+        name: addName,
+        role: "arn:aws:iam::294583657590:role/lambda-role", // default role
+        runtime: "provided.al2", // Use the custom runtime
+        code: new pulumi.asset.FileArchive("../pre-built/post-cat-entry.zip"),
+        handler: "whatever",
+        environment: {
+            variables: {
+                "STAGE": stageName,
+                "BUCKET_NAME": bucketName,
+                "DYNAMO_TABLE": tableName,
+            },
         },
-    },
-})
+    })
+});
 
 const feedLambdaFunctionUrl = new aws.lambda.FunctionUrl("feedLambdaFunctionUrl", {
     authorizationType: "NONE",
