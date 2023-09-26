@@ -5,6 +5,7 @@ import besom.api.aws.apigateway.inputs.*
 import besom.api.aws.lambda.inputs.*
 import besom.api.aws.dynamodb.inputs.*
 import besom.types.Archive.FileArchive
+import besom.api.aws.iam.*
 import spray.json.*
 
 @main def main: Unit = Pulumi.run {
@@ -98,11 +99,32 @@ import spray.json.*
     )
   )
 
+  val lambdaRole = iam.Role("lambda-role", RoleArgs(
+    assumeRolePolicy = JsObject(
+      "Version" -> JsString("2012-10-17"),
+      "Statement" -> JsArray(
+        JsObject(
+          "Action" -> JsString("sts:AssumeRole"),
+          "Effect" -> JsString("Allow"),
+          "Principal" -> JsObject(
+            "Service" -> JsString("lambda.amazonaws.com")
+          )
+        )
+      )
+    ).prettyPrint,
+    forceDetachPolicies = true,
+    managedPolicyArns = List(
+      "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+      "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+      "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+    )
+  ))
+
   val feedLambda = lambda.Function(
     feedName,
     lambda.FunctionArgs(
       name = feedName,
-      role = "arn:aws:iam::294583657590:role/lambda-role",
+      role = lambdaRole.arn,
       runtime = "provided.al2",
       code = FileArchive("../pre-built/render-feed.zip"),
       handler = "whatever",
@@ -120,7 +142,7 @@ import spray.json.*
     addName,
     lambda.FunctionArgs(
       name = addName,
-      role = "arn:aws:iam::294583657590:role/lambda-role",
+      role = lambdaRole.arn,
       runtime = "provided.al2",
       code = FileArchive("../pre-built/post-cat-entry.zip"),
       handler = "whatever",
