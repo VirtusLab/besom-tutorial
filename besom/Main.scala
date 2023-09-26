@@ -74,26 +74,6 @@ import spray.json.*
   )
 
   val stageName: NonEmptyString = "default"
-  val feedName: NonEmptyString  = "pulumi-render-feed"
-  val addName: NonEmptyString   = "pulumi-add-post"
-
-  val feedLambdaLogsName: NonEmptyString = s"/aws/lambda/$feedName"
-  val feedLambdaLogs = cloudwatch.LogGroup(
-    feedLambdaLogsName,
-    cloudwatch.LogGroupArgs(
-      name = feedLambdaLogsName,
-      retentionInDays = 3
-    )
-  )
-
-  val addLambdaLogsName: NonEmptyString = s"/aws/lambda/$addName"
-  val addLambdaLogs = cloudwatch.LogGroup(
-    addLambdaLogsName,
-    cloudwatch.LogGroupArgs(
-      name = addLambdaLogsName,
-      retentionInDays = 3
-    )
-  )
 
   val lambdaRole = iam.Role("lambda-role", iam.RoleArgs(
     assumeRolePolicy = JsObject(
@@ -117,9 +97,8 @@ import spray.json.*
   ))
 
   val feedLambda = lambda.Function(
-    feedName,
+    "pulumi-render-feed",
     lambda.FunctionArgs(
-      name = feedName,
       role = lambdaRole.arn,
       runtime = "provided.al2", // Use the custom runtime
       code = FileArchive("../pre-built/render-feed.zip"),
@@ -135,9 +114,8 @@ import spray.json.*
   )
 
   val addLambda = lambda.Function(
-    addName,
+    "pulumi-add-post",
     lambda.FunctionArgs(
-      name = addName,
       role = lambdaRole.arn,
       runtime = "provided.al2", // Use the custom runtime
       code = FileArchive("../pre-built/post-cat-entry.zip"),
@@ -152,21 +130,29 @@ import spray.json.*
     )
   )
 
-  val feedLambdaFunctionUrl = lambda.FunctionUrl(
-    "feedLambdaFunctionUrl",
-    lambda.FunctionUrlArgs(
-      authorizationType = "NONE",
-      functionName = feedLambda.name
-    )
-  )
+  val feedLambdaLogs = feedLambda.name.flatMap { feedName => 
+    val feedLambdaLogsName: NonEmptyString = s"/aws/lambda/$feedName"
 
-  val addLambdaFunctionUrl = lambda.FunctionUrl(
-    "addLambdaFunctionUrl",
-    lambda.FunctionUrlArgs(
-      authorizationType = "NONE",
-      functionName = addLambda.name
+    cloudwatch.LogGroup(
+      feedLambdaLogsName,
+      cloudwatch.LogGroupArgs(
+        name = feedLambdaLogsName,
+        retentionInDays = 3
+      )
     )
-  )
+  }
+
+  val addLambdaLogs = addLambda.name.flatMap { addName => 
+    val addLambdaLogsName: NonEmptyString = s"/aws/lambda/$addName"
+
+    cloudwatch.LogGroup(
+      addLambdaLogsName,
+      cloudwatch.LogGroupArgs(
+        name = addLambdaLogsName,
+        retentionInDays = 3
+      )
+    )
+  }
 
   val api = apigateway.RestApi(
     "api",
@@ -304,8 +290,6 @@ import spray.json.*
     _        <- addLambdaLogs
     _        <- feedLambda
     _        <- addLambda
-    _        <- feedLambdaFunctionUrl
-    _        <- addLambdaFunctionUrl
     _        <- api
     _        <- feedLambdaPermission
     _        <- addLambdaPermission
