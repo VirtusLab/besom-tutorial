@@ -5,38 +5,34 @@ import besom.api.aws.apigateway.inputs.*
 import besom.api.aws.lambda.inputs.*
 import besom.api.aws.dynamodb.inputs.*
 import besom.types.Archive.FileArchive
-import spray.json._
-import DefaultJsonProtocol._
+import spray.json.*
 
 @main def main: Unit = Pulumi.run {
 
   val feedBucket = s3.Bucket(
     "pulumi-catpost-cat-pics",
     s3.BucketArgs(
-      forceDestroy = true // change to true when destroying completely
+      forceDestroy = true
     )
   )
 
-  val bucketName = feedBucket.bucket.map(NonEmptyString(_).get) // FIXME: this is a hack
+  val bucketName = feedBucket.bucket
 
-  val feedBucketPublicAccessBlock = bucketName.flatMap(name =>
+  val feedBucketPublicAccessBlock = bucketName.flatMap { name =>
     s3.BucketPublicAccessBlock(
       s"${name}-publicaccessblock",
       s3.BucketPublicAccessBlockArgs(
-        bucket = feedBucket.id.map(_.asString), // FIXME this is a hack
-        blockPublicAcls = false, // Do not block public ACLs for this bucket
-        blockPublicPolicy = false, // Do not block public bucket policies for this bucket
-        ignorePublicAcls = false, // Do not ignore public ACLs for this bucket
-        restrictPublicBuckets = false // Do not restrict public bucket policies for this bucket
+        bucket = feedBucket.id,
+        blockPublicPolicy = false
       )
     )
-  )
+  }
 
   val feedBucketPolicy = bucketName.flatMap(name =>
     s3.BucketPolicy(
       s"${name}-access-policy",
       s3.BucketPolicyArgs(
-        bucket = feedBucket.id.map(_.asString), // FIXME this is a hack
+        bucket = feedBucket.id,
         policy = JsObject(
           "Version" -> JsString("2012-10-17"),
           "Statement" -> JsArray(
@@ -53,7 +49,7 @@ import DefaultJsonProtocol._
         ).prettyPrint
       ),
       CustomResourceOptions(
-        dependsOn = Output.sequence(List(feedBucketPublicAccessBlock))
+        dependsOn = feedBucketPublicAccessBlock.map(List(_))
       )
     )
   )
@@ -184,7 +180,7 @@ import DefaultJsonProtocol._
   val feedMethod = apigateway.Method(
     "feedMethod",
     apigateway.MethodArgs(
-      restApi = api.id.map(_.asString), // FIXME: this is a hack
+      restApi = api.id,
       resourceId = api.rootResourceId,
       httpMethod = "GET",
       authorization = "NONE"
@@ -194,7 +190,7 @@ import DefaultJsonProtocol._
   val addResource = apigateway.Resource(
     "addResource",
     apigateway.ResourceArgs(
-      restApi = api.id.map(_.asString), // FIXME: this is a hack
+      restApi = api.id,
       pathPart = "post",
       parentId = api.rootResourceId
     )
@@ -203,8 +199,8 @@ import DefaultJsonProtocol._
   val addMethod = apigateway.Method(
     "addMethod",
     apigateway.MethodArgs(
-      restApi = api.id.map(_.asString), // FIXME: this is a hack
-      resourceId = addResource.id.map(_.asString), // FIXME: this is a hack
+      restApi = api.id,
+      resourceId = addResource.id,
       httpMethod = "POST",
       authorization = "NONE"
     )
@@ -213,7 +209,7 @@ import DefaultJsonProtocol._
   val feedIntegration = apigateway.Integration(
     "feedIntegration",
     apigateway.IntegrationArgs(
-      restApi = api.id.map(_.asString), // FIXME: this is a hack
+      restApi = api.id,
       resourceId = api.rootResourceId,
       httpMethod = feedMethod.httpMethod,
       integrationHttpMethod = "POST",
@@ -225,8 +221,8 @@ import DefaultJsonProtocol._
   val addIntegration = apigateway.Integration(
     "addIntegration",
     apigateway.IntegrationArgs(
-      restApi = api.id.map(_.asString), // FIXME this is a hack
-      resourceId = addResource.id.map(_.asString), // FIXME this is a hack
+      restApi = api.id,
+      resourceId = addResource.id,
       httpMethod = addMethod.httpMethod,
       integrationHttpMethod = "POST",
       `type` = "AWS_PROXY",
@@ -237,18 +233,18 @@ import DefaultJsonProtocol._
   val apiDeployment = apigateway.Deployment(
     "apiDeployment",
     apigateway.DeploymentArgs(
-      restApi = api.id.map(_.asString), // FIXME this is a hack
+      restApi = api.id,
       triggers = Map(
         "resourceId" -> api.rootResourceId,
-        "feedMethodId" -> feedMethod.id.map(_.asString), // FIXME this is a hack
-        "feedIntegrationId" -> feedIntegration.id.map(_.asString), // FIXME this is a hack
-        "addResourceId" -> addResource.id.map(_.asString), // FIXME this is a hack
-        "addMethodId" -> addMethod.id.map(_.asString), // FIXME this is a hack
-        "addIntegrationId" -> addIntegration.id.map(_.asString) // FIXME this is a hack
+        "feedMethodId" -> feedMethod.id,
+        "feedIntegrationId" -> feedIntegration.id,
+        "addResourceId" -> addResource.id,
+        "addMethodId" -> addMethod.id,
+        "addIntegrationId" -> addIntegration.id,
       )
     ),
     CustomResourceOptions(
-      dependsOn = Output.sequence(List(feedLambda, addLambda)), // FIXME: this is a hack
+      dependsOn = Output.sequence(List(feedLambda, addLambda)),
       deleteBeforeReplace = false
     )
   )
@@ -256,8 +252,8 @@ import DefaultJsonProtocol._
   val apiStage = apigateway.Stage(
     "apiStage",
     apigateway.StageArgs(
-      restApi = api.id.map(_.asString), // FIXME this is a hack
-      deployment = apiDeployment.id.map(_.asString), // FIXME this is a hack
+      restApi = api.id,
+      deployment = apiDeployment.id,
       stageName = stageName
     ),
     CustomResourceOptions(
@@ -268,7 +264,7 @@ import DefaultJsonProtocol._
   val apiStageSettings = apigateway.MethodSettings(
     "apiStageSettings",
     apigateway.MethodSettingsArgs(
-      restApi = api.id.map(_.asString), // FIXME this is a hack
+      restApi = api.id,
       stageName = apiStage.stageName,
       methodPath = "*/*",
       settings = MethodSettingsSettingsArgs(
@@ -279,9 +275,9 @@ import DefaultJsonProtocol._
   )
 
   for
-    bucket <- feedBucket
-    _      <- feedBucketPolicy
-    // _        <- feedBucketPublicAccessBlock // FIXME: this is broken
+    bucket   <- feedBucket
+    _        <- feedBucketPolicy
+    _        <- feedBucketPublicAccessBlock 
     _        <- catPostTable
     _        <- feedLambdaLogs
     _        <- addLambdaLogs
