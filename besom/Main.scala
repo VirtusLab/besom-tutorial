@@ -24,7 +24,7 @@ import spray.json.*
       s"${name}-publicaccessblock",
       s3.BucketPublicAccessBlockArgs(
         bucket = feedBucket.id,
-        blockPublicPolicy = false
+        blockPublicPolicy = false // Do not block public bucket policies for this bucket
       )
     )
   }
@@ -55,11 +55,9 @@ import spray.json.*
     )
   )
 
-  val tableName: NonEmptyString = "pulumi-catpost-table";
   val catPostTable = dynamodb.Table(
-    tableName,
+    "pulumi-catpost-table",
     dynamodb.TableArgs(
-      name = tableName,
       attributes = List(
         TableAttributeArgs(
           name = "PartitionKey",
@@ -125,14 +123,14 @@ import spray.json.*
     lambda.FunctionArgs(
       name = feedName,
       role = lambdaRole.arn,
-      runtime = "provided.al2",
+      runtime = "provided.al2", // Use the custom runtime
       code = FileArchive("../pre-built/render-feed.zip"),
-      handler = "whatever",
+      handler = "whatever", // we don't use the handler, but it's required
       environment = FunctionEnvironmentArgs(
         variables = Map(
           "STAGE" -> stageName,
           "BUCKET_NAME" -> bucketName,
-          "DYNAMO_TABLE" -> tableName
+          "DYNAMO_TABLE" -> catPostTable.name
         )
       )
     )
@@ -143,14 +141,14 @@ import spray.json.*
     lambda.FunctionArgs(
       name = addName,
       role = lambdaRole.arn,
-      runtime = "provided.al2",
+      runtime = "provided.al2", // Use the custom runtime
       code = FileArchive("../pre-built/post-cat-entry.zip"),
-      handler = "whatever",
+      handler = "whatever", // we don't use the handler, but it's required
       environment = FunctionEnvironmentArgs(
         variables = Map(
           "STAGE" -> stageName,
           "BUCKET_NAME" -> bucketName,
-          "DYNAMO_TABLE" -> tableName
+          "DYNAMO_TABLE" -> catPostTable.name
         )
       )
     )
@@ -232,10 +230,11 @@ import spray.json.*
     "feedIntegration",
     apigateway.IntegrationArgs(
       restApi = api.id,
-      resourceId = api.rootResourceId,
+      resourceId = api.rootResourceId, // use / path
       httpMethod = feedMethod.httpMethod,
+      // must be POST, this is not a mistake: https://repost.aws/knowledge-center/api-gateway-lambda-template-invoke-error
       integrationHttpMethod = "POST",
-      `type` = "AWS_PROXY",
+      `type` = "AWS_PROXY", // Lambda Proxy integration
       uri = feedLambda.invokeArn
     )
   )
@@ -244,10 +243,11 @@ import spray.json.*
     "addIntegration",
     apigateway.IntegrationArgs(
       restApi = api.id,
-      resourceId = addResource.id,
+      resourceId = addResource.id, // use /post path
       httpMethod = addMethod.httpMethod,
+      // must be POST, this is not a mistake: https://repost.aws/knowledge-center/api-gateway-lambda-template-invoke-error
       integrationHttpMethod = "POST",
-      `type` = "AWS_PROXY",
+      `type` = "AWS_PROXY", // Lambda Proxy integration
       uri = addLambda.invokeArn
     )
   )
@@ -256,6 +256,7 @@ import spray.json.*
     "apiDeployment",
     apigateway.DeploymentArgs(
       restApi = api.id,
+      // workarounds for the underlying provider bugs
       triggers = Map(
         "resourceId" -> api.rootResourceId,
         "feedMethodId" -> feedMethod.id,
