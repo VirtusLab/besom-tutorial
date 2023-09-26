@@ -1,11 +1,9 @@
 import besom.*
-import besom.Input
 import besom.api.aws.*
 import besom.api.aws.apigateway.inputs.*
 import besom.api.aws.lambda.inputs.*
 import besom.api.aws.dynamodb.inputs.*
 import besom.types.Archive.FileArchive
-import besom.api.aws.iam.*
 import spray.json.*
 
 @main def main: Unit = Pulumi.run {
@@ -97,7 +95,7 @@ import spray.json.*
     )
   )
 
-  val lambdaRole = iam.Role("lambda-role", RoleArgs(
+  val lambdaRole = iam.Role("lambda-role", iam.RoleArgs(
     assumeRolePolicy = JsObject(
       "Version" -> JsString("2012-10-17"),
       "Statement" -> JsArray(
