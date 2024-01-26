@@ -5,6 +5,7 @@ import besom.api.aws.lambda.inputs.*
 import besom.api.aws.dynamodb.inputs.*
 import besom.types.Archive.FileArchive
 import spray.json.*
+import spray.json.DefaultJsonProtocol.*
 
 @main def main: Unit = Pulumi.run {
 
@@ -75,26 +76,29 @@ import spray.json.*
 
   val stageName: NonEmptyString = "default"
 
-  val lambdaRole = iam.Role("lambda-role", iam.RoleArgs(
-    assumeRolePolicy = JsObject(
-      "Version" -> JsString("2012-10-17"),
-      "Statement" -> JsArray(
-        JsObject(
-          "Action" -> JsString("sts:AssumeRole"),
-          "Effect" -> JsString("Allow"),
-          "Principal" -> JsObject(
-            "Service" -> JsString("lambda.amazonaws.com")
+  val lambdaRole = iam.Role(
+    "lambda-role",
+    iam.RoleArgs(
+      assumeRolePolicy = JsObject(
+        "Version" -> JsString("2012-10-17"),
+        "Statement" -> JsArray(
+          JsObject(
+            "Action" -> JsString("sts:AssumeRole"),
+            "Effect" -> JsString("Allow"),
+            "Principal" -> JsObject(
+              "Service" -> JsString("lambda.amazonaws.com")
+            )
           )
         )
+      ).prettyPrint,
+      forceDetachPolicies = true,
+      managedPolicyArns = List(
+        "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+        "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
+        "arn:aws:iam::aws:policy/AmazonS3FullAccess"
       )
-    ).prettyPrint,
-    forceDetachPolicies = true,
-    managedPolicyArns = List(
-      "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-      "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess",
-      "arn:aws:iam::aws:policy/AmazonS3FullAccess",
     )
-  ))
+  )
 
   val feedLambda = lambda.Function(
     "pulumi-render-feed",
@@ -130,7 +134,7 @@ import spray.json.*
     )
   )
 
-  val feedLambdaLogs = feedLambda.name.flatMap { feedName => 
+  val feedLambdaLogs = feedLambda.name.flatMap { feedName =>
     val feedLambdaLogsName: NonEmptyString = s"/aws/lambda/$feedName"
 
     cloudwatch.LogGroup(
@@ -142,7 +146,7 @@ import spray.json.*
     )
   }
 
-  val addLambdaLogs = addLambda.name.flatMap { addName => 
+  val addLambdaLogs = addLambda.name.flatMap { addName =>
     val addLambdaLogsName: NonEmptyString = s"/aws/lambda/$addName"
 
     cloudwatch.LogGroup(
@@ -247,7 +251,7 @@ import spray.json.*
         "feedIntegrationId" -> feedIntegration.id,
         "addResourceId" -> addResource.id,
         "addMethodId" -> addMethod.id,
-        "addIntegrationId" -> addIntegration.id,
+        "addIntegrationId" -> addIntegration.id
       )
     ),
     CustomResourceOptions(
@@ -268,6 +272,67 @@ import spray.json.*
     )
   )
 
+  val cloudwatchRole = iam.Role(
+    "cloudwatchRole",
+    iam.RoleArgs(
+      assumeRolePolicy = """{
+          |  "Version": "2012-10-17",
+          |  "Statement": [
+          |    {
+          |      "Effect": "Allow",
+          |      "Action": "sts:AssumeRole",
+          |      "Principal": {
+          |        "Service": [
+          |           "apigateway.amazonaws.com"
+          |        ]
+          |      }
+          |    }
+          |  ]
+          |}
+          |""".stripMargin.parseJson.prettyPrint,
+      managedPolicyArns = List(
+        "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+      )
+    )
+  )
+
+  val cloudwatchRolePolicy = iam.RolePolicy(
+    "cloudwatchRolePolicy",
+    iam.RolePolicyArgs(
+      role = cloudwatchRole.id,
+      policy = """{
+          |  "Version": "2012-10-17",
+          |  "Statement": [
+          |    {
+          |      "Effect": "Allow",
+          |      "Action": [
+          |        "logs:CreateLogGroup",
+          |        "logs:CreateLogStream",
+          |        "logs:DescribeLogGroups",
+          |        "logs:DescribeLogStreams",
+          |        "logs:PutLogEvents",
+          |        "logs:GetLogEvents",
+          |        "logs:FilterLogEvents"
+          |      ],
+          |      "Resource": "*"
+          |    }
+          |  ]
+          |}
+          |""".stripMargin.parseJson.prettyPrint
+    )
+  )
+
+  /*
+   * WARNING: As there is no API method for deleting account settings or resetting it to defaults,
+   * destroying this resource will keep your account settings intact!
+   */
+  val apiAccount = apigateway.Account(
+    "apiAccount",
+    apigateway.AccountArgs(
+      cloudwatchRoleArn = cloudwatchRole.arn
+    )
+  )
+
   val apiStageSettings = apigateway.MethodSettings(
     "apiStageSettings",
     apigateway.MethodSettingsArgs(
@@ -278,13 +343,16 @@ import spray.json.*
         metricsEnabled = true,
         loggingLevel = "ERROR"
       )
+    ),
+    CustomResourceOptions(
+      dependsOn = apiAccount.map(List(_))
     )
   )
 
   for
     bucket   <- feedBucket
     _        <- feedBucketPolicy
-    _        <- feedBucketPublicAccessBlock 
+    _        <- feedBucketPublicAccessBlock
     _        <- catPostTable
     _        <- feedLambdaLogs
     _        <- addLambdaLogs
@@ -300,7 +368,9 @@ import spray.json.*
     _        <- addIntegration
     _        <- apiDeployment
     apiStage <- apiStage
+    _        <- apiAccount
     _        <- apiStageSettings
+    _        <- cloudwatchRolePolicy
   yield Pulumi.exports(
     feedBucket = bucket.bucket,
     endpointURL = apiStage.invokeUrl
