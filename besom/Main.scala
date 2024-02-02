@@ -4,8 +4,8 @@ import besom.api.aws.apigateway.inputs.*
 import besom.api.aws.lambda.inputs.*
 import besom.api.aws.dynamodb.inputs.*
 import besom.types.Archive.FileArchive
-import spray.json.*
-import spray.json.DefaultJsonProtocol.*
+import besom.json.*
+import besom.json.DefaultJsonProtocol.*
 
 @main def main: Unit = Pulumi.run {
 
@@ -349,30 +349,30 @@ import spray.json.DefaultJsonProtocol.*
     )
   )
 
-  for
-    bucket   <- feedBucket
-    _        <- feedBucketPolicy
-    _        <- feedBucketPublicAccessBlock
-    _        <- catPostTable
-    _        <- feedLambdaLogs
-    _        <- addLambdaLogs
-    _        <- feedLambda
-    _        <- addLambda
-    _        <- api
-    _        <- feedLambdaPermission
-    _        <- addLambdaPermission
-    _        <- feedMethod
-    _        <- addResource
-    _        <- addMethod
-    _        <- feedIntegration
-    _        <- addIntegration
-    _        <- apiDeployment
-    apiStage <- apiStage
-    _        <- apiAccount
-    _        <- apiStageSettings
-    _        <- cloudwatchRolePolicy
-  yield Pulumi.exports(
-    feedBucket = bucket.bucket,
+  Stack(
+    feedBucket,
+    feedBucketPolicy,
+    feedBucketPublicAccessBlock,
+    catPostTable,
+    feedLambdaLogs,
+    addLambdaLogs,
+    feedLambda,
+    addLambda,
+    api,
+    feedLambdaPermission,
+    addLambdaPermission,
+    feedMethod,
+    addResource,
+    addMethod,
+    feedIntegration,
+    addIntegration,
+    apiDeployment,
+    apiStage,
+    apiAccount,
+    apiStageSettings,
+    cloudwatchRolePolicy
+  ).exports(
+    feedBucket = feedBucket.bucket,
     endpointURL = apiStage.invokeUrl
   )
 }
