@@ -5,7 +5,6 @@ import besom.api.aws.lambda.inputs.*
 import besom.api.aws.dynamodb.inputs.*
 import besom.types.Archive.FileArchive
 import besom.json.*
-import besom.json.DefaultJsonProtocol.*
 
 @main def main: Unit = Pulumi.run {
 
@@ -254,7 +253,7 @@ import besom.json.DefaultJsonProtocol.*
         "addIntegrationId" -> addIntegration.id
       )
     ),
-    CustomResourceOptions(
+    opts = opts(
       dependsOn = Output.sequence(List(feedLambda, addLambda)),
       deleteBeforeReplace = false
     )
@@ -267,7 +266,7 @@ import besom.json.DefaultJsonProtocol.*
       deployment = apiDeployment.id,
       stageName = stageName
     ),
-    CustomResourceOptions(
+    opts = opts(
       deleteBeforeReplace = true
     )
   )
@@ -275,21 +274,20 @@ import besom.json.DefaultJsonProtocol.*
   val cloudwatchRole = iam.Role(
     "cloudwatchRole",
     iam.RoleArgs(
-      assumeRolePolicy = """{
-          |  "Version": "2012-10-17",
-          |  "Statement": [
-          |    {
-          |      "Effect": "Allow",
-          |      "Action": "sts:AssumeRole",
-          |      "Principal": {
-          |        "Service": [
-          |           "apigateway.amazonaws.com"
-          |        ]
-          |      }
-          |    }
-          |  ]
-          |}
-          |""".stripMargin.parseJson.prettyPrint,
+      assumeRolePolicy = json"""{
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": "sts:AssumeRole",
+                "Principal": {
+                  "Service": [
+                     "apigateway.amazonaws.com"
+                  ]
+                }
+              }
+            ]
+          }""".map(_.prettyPrint),
       managedPolicyArns = List(
         "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
       )
@@ -300,25 +298,25 @@ import besom.json.DefaultJsonProtocol.*
     "cloudwatchRolePolicy",
     iam.RolePolicyArgs(
       role = cloudwatchRole.id,
-      policy = """{
-          |  "Version": "2012-10-17",
-          |  "Statement": [
-          |    {
-          |      "Effect": "Allow",
-          |      "Action": [
-          |        "logs:CreateLogGroup",
-          |        "logs:CreateLogStream",
-          |        "logs:DescribeLogGroups",
-          |        "logs:DescribeLogStreams",
-          |        "logs:PutLogEvents",
-          |        "logs:GetLogEvents",
-          |        "logs:FilterLogEvents"
-          |      ],
-          |      "Resource": "*"
-          |    }
-          |  ]
-          |}
-          |""".stripMargin.parseJson.prettyPrint
+      policy = json"""{
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogGroup",
+                  "logs:CreateLogStream",
+                  "logs:DescribeLogGroups",
+                  "logs:DescribeLogStreams",
+                  "logs:PutLogEvents",
+                  "logs:GetLogEvents",
+                  "logs:FilterLogEvents"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+          """.map(_.prettyPrint)
     )
   )
 
